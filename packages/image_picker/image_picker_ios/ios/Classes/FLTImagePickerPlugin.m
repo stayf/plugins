@@ -325,64 +325,11 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
 }
 
 - (void)checkPhotoAuthorizationWithImagePicker:(UIImagePickerController *)imagePickerController {
-  PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
-  switch (status) {
-    case PHAuthorizationStatusNotDetermined: {
-      [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          if (status == PHAuthorizationStatusAuthorized) {
-            [self showPhotoLibraryWithImagePicker:imagePickerController];
-          } else {
-            [self errorNoPhotoAccess:status];
-          }
-        });
-      }];
-      break;
-    }
-    case PHAuthorizationStatusAuthorized:
-      [self showPhotoLibraryWithImagePicker:imagePickerController];
-      break;
-    case PHAuthorizationStatusDenied:
-    case PHAuthorizationStatusRestricted:
-    default:
-      [self errorNoPhotoAccess:status];
-      break;
-  }
+  [self showPhotoLibraryWithImagePicker:imagePickerController];
 }
 
 - (void)checkPhotoAuthorizationForAccessLevel API_AVAILABLE(ios(14)) {
-  PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
-  switch (status) {
-    case PHAuthorizationStatusNotDetermined: {
-      [PHPhotoLibrary
-          requestAuthorizationForAccessLevel:PHAccessLevelReadWrite
-                                     handler:^(PHAuthorizationStatus status) {
-                                       dispatch_async(dispatch_get_main_queue(), ^{
-                                         if (status == PHAuthorizationStatusAuthorized) {
-                                           [self
-                                               showPhotoLibraryWithPHPicker:self->
-                                                                            _pickerViewController];
-                                         } else if (status == PHAuthorizationStatusLimited) {
-                                           [self
-                                               showPhotoLibraryWithPHPicker:self->
-                                                                            _pickerViewController];
-                                         } else {
-                                           [self errorNoPhotoAccess:status];
-                                         }
-                                       });
-                                     }];
-      break;
-    }
-    case PHAuthorizationStatusAuthorized:
-    case PHAuthorizationStatusLimited:
-      [self showPhotoLibraryWithPHPicker:_pickerViewController];
-      break;
-    case PHAuthorizationStatusDenied:
-    case PHAuthorizationStatusRestricted:
-    default:
-      [self errorNoPhotoAccess:status];
-      break;
-  }
+  [self showPhotoLibraryWithPHPicker:_pickerViewController];
 }
 
 - (void)errorNoCameraAccess:(AVAuthorizationStatus)status {
@@ -398,24 +345,6 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
       [self sendCallResultWithError:[FlutterError
                                         errorWithCode:@"camera_access_denied"
                                               message:@"The user did not allow camera access."
-                                              details:nil]];
-      break;
-  }
-}
-
-- (void)errorNoPhotoAccess:(PHAuthorizationStatus)status {
-  switch (status) {
-    case PHAuthorizationStatusRestricted:
-      [self sendCallResultWithError:[FlutterError
-                                        errorWithCode:@"photo_access_restricted"
-                                              message:@"The user is not allowed to use the photo."
-                                              details:nil]];
-      break;
-    case PHAuthorizationStatusDenied:
-    default:
-      [self sendCallResultWithError:[FlutterError
-                                        errorWithCode:@"photo_access_denied"
-                                              message:@"The user did not allow photo access."
                                               details:nil]];
       break;
   }
@@ -554,8 +483,6 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
     NSNumber *imageQuality = self.callContext.imageQuality;
     NSNumber *desiredImageQuality = [self getDesiredImageQuality:imageQuality];
 
-    PHAsset *originalAsset = [FLTImagePickerPhotoAssetUtil getAssetFromImagePickerInfo:info];
-
     if (maxWidth != nil || maxHeight != nil) {
       image = [FLTImagePickerImageUtil scaledImage:image
                                           maxWidth:maxWidth
@@ -563,43 +490,8 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
                                isMetadataAvailable:YES];
     }
 
-    if (!originalAsset) {
-      // Image picked without an original asset (e.g. User took a photo directly)
-      [self saveImageWithPickerInfo:info image:image imageQuality:desiredImageQuality];
-    } else {
-      void (^resultHandler)(NSData *imageData, NSString *dataUTI, NSDictionary *info) = ^(
-          NSData *_Nullable imageData, NSString *_Nullable dataUTI, NSDictionary *_Nullable info) {
-        // maxWidth and maxHeight are used only for GIF images.
-        [self saveImageWithOriginalImageData:imageData
-                                       image:image
-                                    maxWidth:maxWidth
-                                   maxHeight:maxHeight
-                                imageQuality:desiredImageQuality];
-      };
-      if (@available(iOS 13.0, *)) {
-        [[PHImageManager defaultManager]
-            requestImageDataAndOrientationForAsset:originalAsset
-                                           options:nil
-                                     resultHandler:^(NSData *_Nullable imageData,
-                                                     NSString *_Nullable dataUTI,
-                                                     CGImagePropertyOrientation orientation,
-                                                     NSDictionary *_Nullable info) {
-                                       resultHandler(imageData, dataUTI, info);
-                                     }];
-      } else {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        [[PHImageManager defaultManager]
-            requestImageDataForAsset:originalAsset
-                             options:nil
-                       resultHandler:^(NSData *_Nullable imageData, NSString *_Nullable dataUTI,
-                                       UIImageOrientation orientation,
-                                       NSDictionary *_Nullable info) {
-                         resultHandler(imageData, dataUTI, info);
-                       }];
-#pragma clang diagnostic pop
-      }
-    }
+    // Image picked without an original asset (e.g. User took a photo directly)
+    [self saveImageWithPickerInfo:info image:image imageQuality:desiredImageQuality];
   }
 }
 
